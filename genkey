@@ -1,0 +1,96 @@
+local fs        = require("filesystem")
+local shell     = require("shell")
+local component = require("component")
+local serialization = require("serialization")
+
+local _, options = shell.parse(...)
+
+options.h = options.h or options.help
+
+if options.h then
+    io.write([[Usage: genkey [OPTIONS]
+ OPTION:
+ --bits=256|384    Length of keypair.
+ --file=FILE       Generate a keypair with the specified name.
+ -h, --help        Print this help prompt.
+]])
+    return not not options.h
+end
+
+-- Notify the user when they use invalid options.
+for key, v in pairs(options) do
+    if key ~= "bits" and key ~= "file" then
+        io.stderr:write("Invalid option -- '"..key.."'")
+        os.exit()
+    end
+end
+
+-- Define the options the program will use.
+options = 
+{
+    cmd = "genkey",
+    bits = tonumber(options.bits) or 256,
+    file = options.file or "ec-key"
+}
+
+-- A key can only be 256 or 384 bits in length. Makesure the user enters either or.
+if options.bits ~= 256 and options.bits ~= 384 then
+    io.stderr:write(options.cmd..": Invalid key length. key length must be either 256 or 384.")
+    os.exit()
+end
+
+-- Check if a datacard is installed.
+if not component.isAvailable("data") then
+    io.stderr:write(options.cmd..": No datacard installed. Cryptographic functions not available.")
+    os.exit()
+
+-- Make sure a Tier 3 datacard is installed.
+else
+    local requiredMethods = table.pack("generateKeyPair")
+
+    for i = 1, requiredMethods.n do
+        if requiredMethods[i] and not component.data[requiredMethods[i]] then
+            io.stderr:write(options.cmd..": Datacard does not support the required cryptographic functions. A Tier 3 Data Card is required.")
+            os.exit()
+        end
+    end
+end 
+
+-- Generate the asymmetric keypair.
+local publicKey, privateKey = component.data.generateKeyPair(options.bits)
+
+-- Write the keypair to their respective files. Perform a check to makesure the directory path exists.
+local status, exception = xpcall(function(public, private, filename)
+
+                                     -- Before we attempt to write the keypair, see if the directroy
+                                     -- path exists first. If not, error.
+                                     if not fs.exists(fs.path(filename)) then
+                                         error(options.cmd..": "..filename..": No such file or directory")
+                                     end
+
+                                     local keyPair =
+                                     {
+                                         [1] = public.serialize(),
+                                         [2] = private.serialize()
+                                     }
+
+                                     for key, data in pairs(keyPair) do
+                                         if key == 1 then
+                                             filename = filename..".pub"
+                                         end
+
+                                         data = serialization.serialize(data)
+
+                                         local file = io.open(filename,"wb")
+                                         file:write(data)
+                                         file:close()
+                                     end
+                                 end,
+                                 function(err)
+                                     local expression = "("..options.cmd..": .*)"
+                                     return string.match(err,expression)
+                                 end, publicKey, privateKey, options.file)
+
+if not status then
+    io.stderr:write(exception)
+end
