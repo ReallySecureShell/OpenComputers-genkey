@@ -25,6 +25,12 @@ for key, v in pairs(options) do
     end
 end
 
+-- If the user passes options.bits then check to make sure it can be cast to a number.
+if options.bits and not tonumber(options.bits) then
+    io.stderr:write("Invalid parameter in options.bits: '"..options.bits.."' is of type '"..type(options.bits).."', expected number")
+    os.exit()
+end
+
 -- Define the options the program will use.
 options = 
 {
