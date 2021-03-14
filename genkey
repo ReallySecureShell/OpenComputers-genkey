@@ -76,12 +76,12 @@ local status, exception = xpcall(function(public, private, filename)
 
                                      local keyPair =
                                      {
-                                         [1] = public.serialize(),
-                                         [2] = private.serialize()
+                                         [1] = private.serialize(),
+                                         [2] = public.serialize()
                                      }
 
                                      for key, data in pairs(keyPair) do
-                                         if key == 1 then
+                                         if key == 2 then
                                              filename = filename..".pub"
                                          end
 
